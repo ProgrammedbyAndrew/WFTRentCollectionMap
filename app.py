@@ -25,17 +25,18 @@ def occupantColor(occupant_list):
     """
     total_bal = sum(o["balance"] for o in occupant_list)
     if total_bal > 0:
-        return "#ff8a8a"  # red
-    return "#8ae89f"      # green
+        return "#ff8a8a"  # red (Past Due)
+    return "#8ae89f"      # green (On Time)
 
 @app.route("/")
 def index():
     # 1) occupant data
     all_data = get_leases_data()
+
     # 2) Filter for the property "World Food Trucks"
     filtered = [r for r in all_data if r["property_name"] == "World Food Trucks"]
 
-    # 3) load map_layout.json
+    # 3) load map_layout.json (or default if missing)
     try:
         with open("map_layout.json", "r") as f:
             map_data = json.load(f)
@@ -44,6 +45,7 @@ def index():
 
     if not map_data:
         map_data = {"planeWidth": 600, "planeHeight": 800, "booths": []}
+
     planeW = map_data.get("planeWidth", 600)
     planeH = map_data.get("planeHeight", 800)
     booths = map_data.get("booths", [])
@@ -52,15 +54,15 @@ def index():
     occupant_map = {}
     for row in filtered:
         occupant_name = row["occupant_name"]
-        loc_str       = (row["location"] or "").strip()
-        bal           = row["balance"]
-        lease_id      = row["lease_id"]
-        end_date      = row["lease_end_date"]
+        loc_str = (row["location"] or "").strip()
+        bal     = row["balance"]
+        lease_id= row["lease_id"]
+        end_date= row["lease_end_date"]
 
         if loc_str and loc_str != "N/A":
             for t in loc_str.split():
-                key = t.upper().strip()
-                occupant_map.setdefault(key, []).append({
+                label_key = t.upper().strip()
+                occupant_map.setdefault(label_key, []).append({
                     "occupant_name": occupant_name,
                     "lease_id": lease_id,
                     "lease_end": end_date,
@@ -79,7 +81,8 @@ def index():
             b["occupants"] = []
             b["color"]     = "#bdbdbd"  # vacant / gray
 
-    # The HTML only has two legend items: Past Due (red), On Time (green)
+    # The HTML has two legend items: Past Due (red), On Time (green)
+    # Also includes a button that goes to the VFM link when clicked.
     html_template = """
 <!DOCTYPE html>
 <html>
@@ -93,17 +96,25 @@ def index():
       margin: 0; padding: 0;
     }
     h1 { text-align: center; margin: 20px 0 10px; }
+    .topButtons {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .topButtons button {
+      background: #333; color: #fff; border: none; padding: 8px 16px;
+      margin: 5px; border-radius: 4px; cursor: pointer; font-size: 14px;
+    }
     .pageContent { padding-bottom: 90px; margin: 0 20px; }
     .legend {
       position: fixed; bottom: 0; left: 0; width: 100%;
       background: #fff; border-top: 2px solid #333;
       padding: 8px; z-index: 999; display: flex;
-      justify-content: center; gap: 40px; /* space out the items */
+      justify-content: center; gap: 40px; 
       flex-wrap: wrap;
     }
     .legend-item {
       display: flex; align-items: center; margin: 4px 8px;
-      cursor: pointer; /* we will click for a small explanation */
+      cursor: pointer;
     }
     .color-box {
       width: 20px; height: 20px; margin-right: 6px; border: 2px solid #333;
@@ -120,6 +131,13 @@ def index():
 </head>
 <body>
   <h1>World Food Trucks - Rent Collection Map</h1>
+
+  <!-- Button section -->
+  <div class="topButtons">
+    <button onclick="window.location.href='https://my-vfm-app-70890bc430d3.herokuapp.com/'">
+      Visitors Flea Market
+    </button>
+  </div>
 
   (% if booths|length > 0 %)
     <div class="pageContent">
@@ -161,7 +179,7 @@ def index():
 
         let occList = b.occupants || [];
         if (occList.length > 0) {
-          // Figure out if this occupant is On Time or Past Due
+          // Figure out if occupant is On Time or Past Due
           let colorMeaning = (b.color === "#ff8a8a") ? "PAST DUE" : "ON TIME ($0)";
           let info = occList.map(o => {
             return (
@@ -202,6 +220,7 @@ def index():
 </html>
     """
 
+    # 7) Insert dynamic data into template
     from json import dumps
     booth_json_str = dumps(booths)
 
